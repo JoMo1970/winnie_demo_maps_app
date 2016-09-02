@@ -42,6 +42,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -131,6 +132,23 @@ public class WinnieMapsActivity extends FragmentActivity implements LocationList
         permissionsErroDialog.show();
     }
 
+    //this function will init a prompt if location fails
+    private void initLocationLookupErrorDialog() {
+        final AlertDialog.Builder locationErrorBuilder = new AlertDialog.Builder(this);
+        locationErrorBuilder.setMessage("For some reason, your device is having a hard time establishing position. Please try again later.")
+                .setCancelable(false)
+                .setNegativeButton("OK", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        //close the dialog and kill the app
+                        dialog.cancel();
+                        System.exit(0);
+                    }
+                });
+        final AlertDialog locationErroDialog = locationErrorBuilder.create();
+        locationErroDialog.show();
+    }
+
     //this function will check if permissions are required. If so, will prompt the user. If not, will proceed with location lookup
     @SuppressLint("LongLogTag")
     private void initLocationPermissionsCheck() {
@@ -147,14 +165,47 @@ public class WinnieMapsActivity extends FragmentActivity implements LocationList
         }
     }
 
+    //custom function to get good location
+    private Location getLastKnownLocation() {
+        try {
+            locationManager = (LocationManager)getApplicationContext().getSystemService(LOCATION_SERVICE);
+            List<String> providers = locationManager.getProviders(true);
+            Location bestLocation = null;
+            for (String provider : providers) {
+                Location l = locationManager.getLastKnownLocation(provider);
+                if (l == null) {
+                    continue;
+                }
+                if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                    // Found best last known location: %s", l);
+                    bestLocation = l;
+                }
+            }
+            return bestLocation;
+        }
+        catch (SecurityException se) {
+            return null;
+        }
+        catch (Exception ex) {
+            return  null;
+        }
+    }
+
     //this function will render the location lookup and proceed into the google map population
     private void initLocationLookup() {
 
         try {
-            currentLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            Log.i("initLocationLookup()", "Location obtained: \n Latitude: " + currentLocation.getLatitude() + "\nLongitude: " +  currentLocation.getLongitude() + ". Launching FourSquare Lookup Async Task");
-            //perform async task
-            new FourSquareLookup().execute();
+            //get locaiton
+            currentLocation = getLastKnownLocation();
+            //check for null
+            if(currentLocation.equals(null)) {
+                initLocationLookupErrorDialog();
+            }
+            else {
+                Log.i("initLocationLookup()", "Location obtained: \n Latitude: " + currentLocation.getLatitude() + "\nLongitude: " +  currentLocation.getLongitude() + ". Launching FourSquare Lookup Async Task");
+                //perform async task
+                new FourSquareLookup().execute();
+            }
         }
         catch (SecurityException se) {
             Log.e("initLocationLookup()", se.toString());
